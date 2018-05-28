@@ -1,5 +1,9 @@
 # Changelog
 
+## v2.2.1 (2018-05-28)
+
+* Removed footer check & updated template design
+
 ## v2.1.9 (2018-05-21)
 
 * Notifications:
