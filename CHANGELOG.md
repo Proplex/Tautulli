@@ -1,8 +1,69 @@
 # Changelog
 
+## v2.2.2 (2018-06-28)
+* Merge upstream
+
 ## v2.2.1 (2018-05-28)
 
 * Removed footer check & updated template design
+## v2.1.14 (2018-06-21)
+
+* Notifications:
+  * Fix: Parsing script arguments in quotes.
+* UI:
+  * Fix: Slow loading due to Font Awesome 5 javascript.
+  * Change: Play counts on user an library pages now respect the history grouping setting.
+* API:
+  * New: Added optional grouping parameter to user and library watch statistics.
+
+
+## v2.1.13 (2018-06-16)
+
+* Monitoring:
+  * Fix: Soft crash when viewing photos not in an album.
+* Notifications:
+  * New: Added current date and time notification parameters.
+* UI:
+  * New: Added support page with embedded Discord chat using WidgetBot.
+
+
+## v2.1.12 (2018-06-08)
+
+* Notifications:
+  * Change: Blank notification link source means disabled instead of default.
+* Newsletters:
+  * New: Make collection tags available in the raw newsletter data for custom templates.
+* API:
+  * New: Ability to terminate a stream using the session key.
+
+
+## v2.1.11-beta (2018-06-02)
+
+* Monitoring:
+  * Fix: Activity progress bar not updating in some cases.
+  * Fix: Monitory Remote Access setting disabled due to Plex Media Server API changes.
+  * Change: Improved logic for grouping history items without being successive plays.
+* Notifications:
+  * New: Added filename to notification parameters.
+* Other:
+  * Fix: Update metadata failing for tracks without track numbers.
+
+
+## v2.1.10-beta (2018-05-28)
+
+* Monitoring:
+  * Fix: Improved monitoring of live tv sessions.
+  * Change: Use track artist instead of album artist.
+* Notifications:
+  * New: Added timestamp to Discord notification embeds. (Thanks @samwiseg00)
+  * New: Enable notifications for "clip" media types.
+  * Fix: Actually add the "live" notification parameter.
+  * Change: Update Twitter for 280 characters.
+  * Change: Use HTTPS url for Cloudinary images.
+* Newsletters:
+  * Fix: Artist summaries not showing up on newsletter cards.
+  * Change: Do not send the newsletter if the template fails to render.
+
 
 ## v2.1.9 (2018-05-21)
 

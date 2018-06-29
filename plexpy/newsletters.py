@@ -195,6 +195,7 @@ def add_newsletter_config(agent_id=None, **kwargs):
         newsletter_id = db.last_insert_id()
         logger.info(u"Tautulli Newsletters :: Added new newsletter agent: %s (newsletter_id %s)."
                     % (agent['label'], newsletter_id))
+        blacklist_logger()
         return newsletter_id
     except Exception as e:
         logger.warn(u"Tautulli Newsletters :: Unable to add newsletter agent: %s." % e)
@@ -253,6 +254,7 @@ def set_newsletter_config(newsletter_id=None, agent_id=None, **kwargs):
         logger.info(u"Tautulli Newsletters :: Updated newsletter agent: %s (newsletter_id %s)."
                     % (agent['label'], newsletter_id))
         newsletter_handler.schedule_newsletters(newsletter_id=newsletter_id)
+        blacklist_logger()
         return True
     except Exception as e:
         logger.warn(u"Tautulli Newsletters :: Unable to update newsletter agent: %s." % e)
@@ -273,6 +275,17 @@ def send_newsletter(newsletter_id=None, subject=None, body=None, message=None, n
         logger.debug(u"Tautulli Newsletters :: Notification requested but no newsletter_id received.")
 
 
+def blacklist_logger():
+    db = database.MonitorDatabase()
+    notifiers = db.select('SELECT newsletter_config, email_config FROM newsletters')
+
+    for n in notifiers:
+        config = json.loads(n['newsletter_config'] or '{}')
+        logger.blacklist_config(config)
+        email_config = json.loads(n['email_config'] or '{}')
+        logger.blacklist_config(email_config)
+
+
 def serve_template(templatename, **kwargs):
     if plexpy.CONFIG.NEWSLETTER_CUSTOM_DIR:
         template_dir = plexpy.CONFIG.NEWSLETTER_CUSTOM_DIR
@@ -287,9 +300,9 @@ def serve_template(templatename, **kwargs):
 
     try:
         template = _hplookup.get_template(templatename)
-        return template.render(**kwargs)
+        return template.render(**kwargs), False
     except:
-        return exceptions.html_error_template().render()
+        return exceptions.html_error_template().render(), True
 
 
 def generate_newsletter_uuid():
@@ -375,6 +388,7 @@ class Newsletter(object):
         self.newsletter = None
 
         self.is_preview = False
+        self.template_error = None
 
     def set_config(self, config=None, default=None):
         return self._validate_config(config=config, default=default)
@@ -433,6 +447,10 @@ class Newsletter(object):
 
     def send(self):
         self.newsletter = self.generate_newsletter()
+
+        if self.template_error:
+            logger.error(u"Tautulli Newsletters :: %s newsletter failed to render template. Newsletter not sent." % self.NAME)
+            return False
 
         if not self._has_data():
             logger.warn(u"Tautulli Newsletters :: %s newsletter has no data. Newsletter not sent." % self.NAME)
@@ -513,6 +531,14 @@ class Newsletter(object):
             'server_name': plexpy.CONFIG.PMS_NAME,
             'start_date': self.start_date.format(date_format),
             'end_date': self.end_date.format(date_format),
+            'current_year': self.start_date.year,
+            'current_month': self.start_date.month,
+            'current_day': self.start_date.day,
+            'current_hour': self.start_date.hour,
+            'current_minute': self.start_date.minute,
+            'current_second': self.start_date.second,
+            'current_weekday': self.start_date.isocalendar()[2],
+            'current_week': self.start_date.isocalendar()[1],
             'week_number': self.start_date.isocalendar()[1],
             'newsletter_time_frame': self.config['time_frame'],
             'newsletter_time_frame_units': self.config['time_frame_units'],
@@ -763,8 +789,9 @@ class RecentlyAdded(Newsletter):
                 else:
                     item['art_hash'] = ''
 
-                item['poster_url'] = ''
+                item['thumb_url'] = ''
                 item['art_url'] = ''
+                item['poster_url'] = item['thumb_url']  # Keep for backwards compatibility
 
         elif helpers.get_img_service():
             # Upload posters and art to image hosting service
@@ -780,7 +807,7 @@ class RecentlyAdded(Newsletter):
                     img=item['thumb'], rating_key=item['rating_key'], title=item['title'],
                     width=150, height=height, fallback=fallback)
 
-                item['poster_url'] = img_info.get('img_url') or common.ONLINE_POSTER_THUMB
+                item['thumb_url'] = img_info.get('img_url') or common.ONLINE_POSTER_THUMB
 
                 img_info = get_img_info(
                     img=item['art'], rating_key=item['rating_key'], title=item['title'],
@@ -790,6 +817,15 @@ class RecentlyAdded(Newsletter):
 
                 item['thumb_hash'] = ''
                 item['art_hash'] = ''
+                item['poster_url'] = item['thumb_url']  # Keep for backwards compatibility
+
+        else:
+            for item in movies + shows + albums:
+                item['thumb_hash'] = ''
+                item['art_hash'] = ''
+                item['thumb_url'] = ''
+                item['art_url'] = ''
+                item['poster_url'] = item['thumb_url']  # Keep for backwards compatibility
 
         self.data['recently_added'] = recently_added
 
