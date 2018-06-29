@@ -434,7 +434,7 @@ class Newsletter(object):
 
         self.retrieve_data()
 
-        return serve_template(
+        newsletter_rendered, self.template_error = serve_template(
             templatename=self._TEMPLATE,
             uuid=self.uuid,
             subject=self.subject_formatted,
@@ -444,6 +444,11 @@ class Newsletter(object):
             data=self.data,
             preview=self.is_preview
         )
+
+        if self.template_error:
+            return newsletter_rendered
+
+        return newsletter_rendered
 
     def send(self):
         self.newsletter = self.generate_newsletter()
