@@ -1,5 +1,8 @@
 # Changelog
 
+## v2.2.3 (2018-06-28)
+* Fix bad merge
+
 ## v2.2.2 (2018-06-28)
 * Merge upstream
 
