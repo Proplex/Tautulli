@@ -1,3 +1,29 @@
+var p = {
+    name: 'Unknown',
+    version: 'Unknown',
+    os: 'Unknown'
+};
+if (typeof platform !== 'undefined') {
+    p.name = platform.name;
+    p.version = platform.version;
+    p.os = platform.os.toString();
+}
+
+if (['IE', 'Microsoft Edge', 'IE Mobile'].indexOf(p.name) > -1) {
+    $('body').prepend('<div id="browser-warning"><i class="fa fa-exclamation-circle"></i>&nbsp;' +
+        'Tautulli does not support Internet Explorer or Microsoft Edge! ' +
+        'Please use a different browser such as Chrome or Firefox.</div>');
+    var offset = $('#browser-warning').height();
+    var navbar = $('.navbar-fixed-top');
+    if (navbar.length) {
+        navbar.offset({top: navbar.offset().top + offset});
+    }
+    var container = $('.body-container');
+    if (container.length) {
+        container.offset({top: container.offset().top + offset});
+    }
+}
+
 function initConfigCheckbox(elem, toggleElem, reverse) {
     toggleElem = (toggleElem === undefined) ? null : toggleElem;
     reverse = (reverse === undefined) ? false : reverse;
@@ -491,25 +517,42 @@ function PopupCenter(url, title, w, h) {
     return newWindow;
 }
 
-if (!localStorage.getItem('Tautulli_ClientId')) {
-    localStorage.setItem('Tautulli_ClientId', uuidv4());
+
+function setLocalStorage(key, value, path) {
+    if (path !== false) {
+        key = key + '_' + window.location.pathname;
+    }
+    localStorage.setItem(key, value);
+}
+function getLocalStorage(key, default_value, path) {
+    if (path !== false) {
+        key = key + '_' + window.location.pathname;
+    }
+    var value = localStorage.getItem(key);
+    if (value !== null) {
+        return value
+    } else if (default_value !== undefined) {
+        setLocalStorage(key, default_value, path);
+        return default_value
+    }
 }
 
 function uuidv4() {
-    return ([1e7]+-1e3+-4e3+-8e3+-1e11).replace(/[018]/g, c =>
-        (c ^ crypto.getRandomValues(new Uint8Array(1))[0] & 15 >> c / 4).toString(16)
-    )
+    return ([1e7]+-1e3+-4e3+-8e3+-1e11).replace(/[018]/g, function(c) {
+        var cryptoObj = window.crypto || window.msCrypto; // for IE 11
+        return (c ^ cryptoObj.getRandomValues(new Uint8Array(1))[0] & 15 >> c / 4).toString(16)
+    });
 }
 
 var x_plex_headers = {
     'Accept': 'application/json',
     'X-Plex-Product': 'Tautulli',
     'X-Plex-Version': 'Plex OAuth',
-    'X-Plex-Client-Identifier': localStorage.getItem('Tautulli_ClientId'),
-    'X-Plex-Platform': platform.name,
-    'X-Plex-Platform-Version': platform.version,
-    'X-Plex-Device': platform.os.toString(),
-    'X-Plex-Device-Name': platform.name
+    'X-Plex-Client-Identifier': getLocalStorage('Tautulli_ClientID', uuidv4(), false),
+    'X-Plex-Platform': p.name,
+    'X-Plex-Platform-Version': p.version,
+    'X-Plex-Device': p.os,
+    'X-Plex-Device-Name': p.name
 };
 
 var plex_oauth_window = null;
@@ -568,7 +611,6 @@ getPlexOAuthPin = function () {
         type: 'POST',
         headers: x_plex_headers,
         success: function(data) {
-            plex_oauth_window.location = 'https://app.plex.tv/auth/#!?clientID=' + x_plex_headers['X-Plex-Client-Identifier'] + '&code=' + data.code;
             deferred.resolve({pin: data.id, code: data.code});
         },
         error: function() {
@@ -585,7 +627,6 @@ function PlexOAuth(success, error, pre) {
     if (typeof pre === "function") {
         pre()
     }
-    clearTimeout(polling);
     closePlexOAuthWindow();
     plex_oauth_window = PopupCenter('', 'Plex-OAuth', 600, 700);
     $(plex_oauth_window.document.body).html(plex_oauth_loader);
@@ -593,40 +634,38 @@ function PlexOAuth(success, error, pre) {
     getPlexOAuthPin().then(function (data) {
         const pin = data.pin;
         const code = data.code;
-        var keep_polling = true;
+
+        plex_oauth_window.location = 'https://app.plex.tv/auth/#!?clientID=' + x_plex_headers['X-Plex-Client-Identifier'] + '&code=' + code;
+        polling = pin;
 
         (function poll() {
-            polling = setTimeout(function () {
-                $.ajax({
-                    url: 'https://plex.tv/api/v2/pins/' + pin,
-                    type: 'GET',
-                    headers: x_plex_headers,
-                    success: function (data) {
-                        if (data.authToken){
-                            keep_polling = false;
-                            closePlexOAuthWindow();
-                            if (typeof success === "function") {
-                                success(data.authToken)
-                            }
+            $.ajax({
+                url: 'https://plex.tv/api/v2/pins/' + pin,
+                type: 'GET',
+                headers: x_plex_headers,
+                success: function (data) {
+                    if (data.authToken){
+                        closePlexOAuthWindow();
+                        if (typeof success === "function") {
+                            success(data.authToken)
                         }
-                    },
-                    error: function () {
-                        keep_polling = false;
+                    }
+                },
+                error: function (jqXHR, textStatus, errorThrown) {
+                    if (textStatus !== "timeout") {
                         closePlexOAuthWindow();
                         if (typeof error === "function") {
                             error()
                         }
-                    },
-                    complete: function () {
-                        if (keep_polling){
-                            poll();
-                        } else {
-                            clearTimeout(polling);
-                        }
-                    },
-                    timeout: 1000
-                });
-            }, 1000);
+                    }
+                },
+                complete: function () {
+                    if (!plex_oauth_window.closed && polling === pin){
+                        setTimeout(function() {poll()}, 1000);
+                    }
+                },
+                timeout: 10000
+            });
         })();
     }, function () {
         closePlexOAuthWindow();

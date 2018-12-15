@@ -418,25 +418,27 @@ class PmsConnect(object):
 
         return request
 
-    def get_hub_recently_added(self, start='0', count='0', type='', output_format=''):
+    def get_hub_recently_added(self, start='0', count='0', media_type='', other_video=False, output_format=''):
         """
         Return Plex hub recently added.
 
         Parameters required:    start { item number to start from }
                                 count { number of results to return }
-                                type { str }
+                                media_type { str }
         Optional parameters:    output_format { dict, json }
 
         Output: array
         """
-        uri = '/hubs/home/recentlyAdded?X-Plex-Container-Start=%s&X-Plex-Container-Size=%s&type=%s' % (start, count, type)
+        personal = '&personal=1' if other_video else ''
+        uri = '/hubs/home/recentlyAdded?X-Plex-Container-Start=%s&X-Plex-Container-Size=%s&type=%s%s' \
+              % (start, count, media_type, personal)
         request = self.request_handler.make_request(uri=uri,
                                                     request_type='GET',
                                                     output_format=output_format)
 
         return request
 
-    def get_recently_added_details(self, start='0', count='0', type='', section_id=''):
+    def get_recently_added_details(self, start='0', count='0',  media_type='', section_id=''):
         """
         Return processed and validated list of recently added items.
 
@@ -444,14 +446,18 @@ class PmsConnect(object):
 
         Output: array
         """
-        if type in ('movie', 'show', 'artist'):
-            if type == 'movie':
-                type = '1'
-            elif type == 'show':
-                type = '2'
-            elif type == 'artist':
-                type = '8'
-            recent = self.get_hub_recently_added(start, count, type, output_format='xml')
+        if media_type in ('movie', 'show', 'artist', 'other_video'):
+            other_video = False
+            if media_type == 'movie':
+                media_type = '1'
+            elif media_type == 'show':
+                media_type = '2'
+            elif media_type == 'artist':
+                media_type = '8'
+            elif media_type == 'other_video':
+                media_type = '1'
+                other_video = True
+            recent = self.get_hub_recently_added(start, count, media_type, other_video, output_format='xml')
         elif section_id:
             recent = self.get_library_recently_added(section_id, start, count, output_format='xml')
         else:
@@ -1882,6 +1888,18 @@ class PmsConnect(object):
 
         stream_details['transcode_decision'] = transcode_decision
 
+        # Override * in audio codecs
+        if stream_details['stream_audio_codec'] == '*':
+            stream_details['stream_audio_codec'] = source_audio_details['audio_codec']
+        if transcode_details['transcode_audio_codec'] == '*':
+            transcode_details['transcode_audio_codec'] = source_audio_details['audio_codec']
+
+        # Override * in video codecs
+        if stream_details['stream_video_codec'] == '*':
+            stream_details['stream_video_codec'] = source_video_details['video_codec']
+        if transcode_details['transcode_video_codec'] == '*':
+            transcode_details['transcode_video_codec'] = source_video_details['video_codec']
+
         # Get the quality profile
         if media_type in ('movie', 'episode', 'clip') and 'stream_bitrate' in stream_details:
             if sync_id:
@@ -2290,6 +2308,7 @@ class PmsConnect(object):
                     libraries_output = {'section_id': helpers.get_xml_attr(result, 'key'),
                                         'section_type': helpers.get_xml_attr(result, 'type'),
                                         'section_name': helpers.get_xml_attr(result, 'title'),
+                                        'agent': helpers.get_xml_attr(result, 'agent'),
                                         'thumb': helpers.get_xml_attr(result, 'thumb'),
                                         'art': helpers.get_xml_attr(result, 'art')
                                         }
@@ -2450,6 +2469,7 @@ class PmsConnect(object):
                     library_stats = {'section_id': section_id,
                                      'section_name': library['section_name'],
                                      'section_type': section_type,
+                                     'agent': library['agent'],
                                      'thumb': library['thumb'],
                                      'art': library['art'],
                                      'count': children_list['library_count']

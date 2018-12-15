@@ -1,31 +1,99 @@
 # Changelog
 
-
-## v2.3 (2018-09-02)
+## v2.3 (2018-12-01)
 
 * Monitoring:
-  * Fix: Fetch messing season info when "Hide Seasons" is enabled for a show.
-  * Fix: Video and Audio details sometimes missing on activity cards.
+  * Fix: Resume event not being triggered after buffering.
 * Notifications:
-  * New: Added UTC timestamp to notification parameters. (Thanks @samwiseg00)
-  * New: Added TAUTULLI_PUBLIC_URL to script environment variables. (Thanks @samwiseg00)
-* UI:
-  * Change: Automatically redirect '/' to HTTP root if enabled.
+  * New: Added user email as a notification parameter.
+* Graphs:
+  * Fix: History model showing no results for stream info graph.
 * API:
-  * New: Added return_hash parameter to pms_image_proxy command.
-  * New: Added session_id parameter to get_activity command.
+  * Fix: API returning error when missing a cmd.
+
+
+## v2.1.25 (2018-11-03)
+
+* Monitoring:
+  * Fix: Audio and video codec showing up as * on the activity cards.
+  * New: Poster and background image on the activity cards for live TV.
+* UI:
+  * Fix: Alert message for invalid Tautulli Public Domain setting.
+
+
+## v2.1.24-beta (2018-10-29)
+
+* Monitoring:
+  * Fix: Transcode change events creating invalid sessions in the database.
+* Notifications:
+  * Change: Update Telegram character limit to 1024.
+* History:
+  * Fix: Save history table states separately for multiple Tautulli instances.
+* Graphs:
+  * Fix: Save graphs states separately for multiple Tautulli instances.
+  * Change: Version graphs to bypass browser cache.
+* UI:
+  * New: Added queued tasks modals to the scheduled tasks table for debugging.
 * Other:
-  * Change: Linux systemd startup script to use the "tautulli" group permission. (Thanks @samwiseg00)
+  * Change: Updated timezone info and display in configuration table.
 
-## v2.2.3 (2018-06-28)
-* Fix bad merge
 
-## v2.2.2 (2018-06-28)
-* Merge upstream
+## v2.1.23-beta (2018-10-14)
 
-## v2.2.1 (2018-05-28)
+* Monitoring:
+  * Fix: Buffer events not being triggered properly.
+  * Fix: Watched progress sometimes not saved correctly. (Thanks @Sheigutn)
+* Notifications:
+  * New: Added notification trigger for transcode decision change.
+  * Fix: Multiple buffer notifications being triggered within the same second.
+  * Change: Default buffer notification threshold changed to 10 for buffer thresholds less than 10.
+* Newsletter:
+  * New: Added Other Video libraries to the newsletter.
+* Homepage:
+  * New: Added Other Video type to recently added on the homepage.
+  * Change: Save homepage recently added media type toggle state.
+  * Change: Save homepage stats config to local storage instead of the server.
+* History:
+  * Change: Save history table media type toggle state.
+* Graphs:
+  * Change: Save series visibility state when toggling the legend.
+  * Change: Save graph config to local storage instead of the server.
+* UI:
+  * New: Show the remote app device token and id in the edit device modal.
+  * Change: Lock certain settings if using the Tautulli docker container.
+* API:
+  * Fix: download_config, download_database, download_log, and download_plex_log API commands not working.
+  * Change: get_recently_added command 'type' parameter renamed to 'media_type'. Backwards compatibility is maintained.
+  * Change: get_home_stats command 'stats_type' parameter change to string 'plays' or 'duration'. Backwards compatibility is maintained.
 
-* Removed footer check & updated template design
+
+## v2.1.22 (2018-10-05)
+
+* Notifications:
+  * Fix: Notification agent settings not loading when failed to retrieve some data.
+* UI:
+  * Fix: Incorrectly showing localhost server in the setup wizard.
+* Other:
+  * Fix: Incorrect redirect to HTTP when HTTPS proxy header is present.
+  * Fix: Websocket not connecting automatically after the setup wizard.
+
+
+## v2.1.21 (2018-09-21)
+
+* Notifications:
+  * Fix: Content Rating notification condition always evaluating to True. (Thanks @Arcanemagus)
+  * Fix: Script arguments not showing substituted values in the notification logs.
+* UI:
+  * New: Unsupported browser warning when using IE or Edge.
+  * Fix: Misaligned refresh image icon in album search results. (Thanks @Sheigutn)
+  * Fix: Music history showing as pre-Tautulli in stream info modal.
+* Other:
+  * Fix: Typo in Systemd init script group value. (Thanks @ldumont)
+  * Fix: Execute permissions in Fedora/CentOS and Systemd init scripts. (Thanks @wilmardo)
+  * Fix: Systemd init script instructions per Linux distro. (Thanks @samwiseg00)
+  * Change: Fallback to Tautulli data directory if logs/backup/cache/newsletter directories are not writable.
+  * Change: Check for alternative reverse proxy headers if X-Forwarded-Host is missing.
+
 
 ## v2.1.20 (2018-09-05)
 * No changes.

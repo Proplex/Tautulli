@@ -14,6 +14,7 @@
 #  along with Tautulli.  If not, see <http://www.gnu.org/licenses/>.
 
 import arrow
+from collections import OrderedDict
 import json
 from itertools import groupby
 from mako.lookup import TemplateLookup
@@ -664,7 +665,7 @@ class RecentlyAdded(Newsletter):
         start = 0
 
         while not done:
-            recent_items = pms_connect.get_recently_added_details(start=str(start), count='10', type=media_type)
+            recent_items = pms_connect.get_recently_added_details(start=str(start), count='10', media_type=media_type)
             filtered_items = [i for i in recent_items['recently_added']
                               if self.start_time < helpers.cast_to_int(i['added_at']) < self.end_time]
             if len(filtered_items) < 10:
@@ -674,7 +675,7 @@ class RecentlyAdded(Newsletter):
 
             recently_added.extend(filtered_items)
 
-        if media_type == 'movie':
+        if media_type in ('movie', 'other_video'):
             movie_list = []
             for item in recently_added:
                 # Filter included libraries
@@ -776,8 +777,13 @@ class RecentlyAdded(Newsletter):
         if not self.config['incl_libraries']:
             logger.warn(u"Tautulli Newsletters :: Failed to retrieve %s newsletter data: no libraries selected." % self.NAME)
 
-        media_types = {s['section_type'] for s in self._get_sections()
-                       if str(s['section_id']) in self.config['incl_libraries']}
+        media_types = set()
+        for s in self._get_sections():
+            if str(s['section_id']) in self.config['incl_libraries']:
+                if s['section_type'] == 'movie' and s['agent'] == 'com.plexapp.agents.none':
+                    media_types.add('other_video')
+                else:
+                    media_types.add(s['section_type'])
 
         recently_added = {}
         for media_type in media_types:
@@ -788,9 +794,10 @@ class RecentlyAdded(Newsletter):
         shows = recently_added.get('show', [])
         artists = recently_added.get('artist', [])
         albums = [a for artist in artists for a in artist['album']]
+        other_video = recently_added.get('other_video', [])
 
         if self.is_preview or helpers.get_img_service(include_self=True) == 'self-hosted':
-            for item in movies + shows + albums:
+            for item in movies + shows + albums + other_video:
                 if item['media_type'] == 'album':
                     height = 150
                     fallback = 'cover'
@@ -814,7 +821,7 @@ class RecentlyAdded(Newsletter):
 
         elif helpers.get_img_service():
             # Upload posters and art to image hosting service
-            for item in movies + shows + albums:
+            for item in movies + shows + albums + other_video:
                 if item['media_type'] == 'album':
                     height = 150
                     fallback = 'cover'
@@ -839,7 +846,7 @@ class RecentlyAdded(Newsletter):
                 item['poster_url'] = item['thumb_url']  # Keep for backwards compatibility
 
         else:
-            for item in movies + shows + albums:
+            for item in movies + shows + albums + other_video:
                 item['thumb_hash'] = ''
                 item['art_hash'] = ''
                 item['thumb_url'] = ''
@@ -852,10 +859,11 @@ class RecentlyAdded(Newsletter):
 
     def _has_data(self):
         recently_added = self.data.get('recently_added')
-        if recently_added and \
-                recently_added.get('movie') or \
-                recently_added.get('show') or \
-                recently_added.get('artist'):
+        if recently_added and (
+                recently_added.get('movie') or
+                recently_added.get('show') or
+                recently_added.get('artist') or
+                recently_added.get('other_video')):
             return True
 
         return False
@@ -864,18 +872,26 @@ class RecentlyAdded(Newsletter):
         return libraries.Libraries().get_sections()
 
     def _get_sections_options(self):
-        library_types = {'movie': 'Movie Libraries',
-                         'show': 'TV Show Libraries',
-                         'artist': 'Music Libraries'}
         sections = {}
         for s in self._get_sections():
             if s['section_type'] != 'photo':
-                library_type = library_types[s['section_type']]
+                if s['section_type'] == 'movie' and s['agent'] == 'com.plexapp.agents.none':
+                    library_type = 'other_video'
+                else:
+                    library_type = s['section_type']
                 group = sections.get(library_type, [])
                 group.append({'value': s['section_id'],
                               'text': s['section_name']})
                 sections[library_type] = group
-        return sections
+
+        groups = OrderedDict([(k, v) for k, v in [
+            ('Movie Libraries', sections.get('movie')),
+            ('TV Show Libraries', sections.get('show')),
+            ('Music Libraries', sections.get('artist')),
+            ('Other Video Libraries', sections.get('other_video'))
+        ] if v is not None])
+
+        return groups
 
     def build_params(self):
         parameters = self._build_params()

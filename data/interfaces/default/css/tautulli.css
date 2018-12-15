@@ -676,7 +676,9 @@ textarea.form-control:focus {
     color: #F9AA03;
     margin: 5px 40px 5px 0;
 }
-.form-control[readonly] {
+.form-control[disabled],
+.form-control[readonly],
+fieldset[disabled] .form-control {
     background-color: #555;
 }
 .form-control[readonly]:focus {
@@ -2151,6 +2153,10 @@ div.advanced-setting {
 li.advanced-setting {
     border-left: 1px solid #cc7b19;
 }
+.docker-setting {
+    color: #cc7b19;
+    margin-left: 10px;
+}
 .user-info-wrapper {
 }
 .user-info-poster-face {
@@ -3361,6 +3367,34 @@ pre::-webkit-scrollbar-thumb {
 .notification-params tr:nth-child(even) td {
     background-color: rgba(255,255,255,0.010);
 }
+.activity-queue {
+    width: 100%;
+    margin-top: 10px;
+    background-color: #282828;
+}
+.activity-queue th {
+    padding-left: 10px;
+    height: 30px;
+}
+.activity-queue th:first-child {
+    width: 268px;
+}
+.activity-queue th:nth-child(2) {
+    width: 125px;
+}
+.activity-queue th:nth-child(3) {
+    width: 175px;
+}
+.activity-queue td {
+    height: 25px;
+    padding: 5px 10px;
+}
+.activity-queue tr:nth-child(odd) td {
+    background-color: rgba(255,255,255,0.035);
+}
+.activity-queue tr:nth-child(even) td {
+    background-color: rgba(255,255,255,0.010);
+}
 #days-selection label,
 #months-selection label {
     margin-bottom: 0;
@@ -4162,4 +4196,16 @@ a[data-tab-destination] {
 }
 .fa-blank {
     visibility: hidden;
+}
+
+#browser-warning {
+    height: 25px;
+    width: 100%;
+    background: #cc7b19;
+    text-align: center;
+    font-weight: bold;
+    padding-top: 2px;
+    position: absolute;
+    top: 0;
+    z-index: 9999;
 }

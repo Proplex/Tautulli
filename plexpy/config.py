@@ -104,7 +104,7 @@ _CONFIG_DEFINITIONS = {
     'BROWSER_ON_PMSUPDATE': (int, 'Browser', 0),
     'BROWSER_ON_CONCURRENT': (int, 'Browser', 0),
     'BROWSER_ON_NEWDEVICE': (int, 'Browser', 0),
-    'BUFFER_THRESHOLD': (int, 'Monitoring', 3),
+    'BUFFER_THRESHOLD': (int, 'Monitoring', 10),
     'BUFFER_WAIT': (int, 'Monitoring', 900),
     'BACKUP_DAYS': (int, 'General', 3),
     'BACKUP_DIR': (str, 'General', ''),
@@ -182,10 +182,6 @@ _CONFIG_DEFINITIONS = {
     'GIT_TOKEN': (str, 'General', ''),
     'GIT_USER': (str, 'General', 'Tautulli'),
     'GIT_REPO': (str, 'General', 'Tautulli'),
-    'GRAPH_TYPE': (str, 'General', 'plays'),
-    'GRAPH_DAYS': (int, 'General', 30),
-    'GRAPH_MONTHS': (int, 'General', 12),
-    'GRAPH_TAB': (str, 'General', 'tabs-1'),
     'GROUP_HISTORY_TABLES': (int, 'General', 1),
     'GROWL_ENABLED': (int, 'Growl', 0),
     'GROWL_HOST': (str, 'Growl', ''),
@@ -207,12 +203,8 @@ _CONFIG_DEFINITIONS = {
     'HISTORY_TABLE_ACTIVITY': (int, 'General', 1),
     'HOME_SECTIONS': (list, 'General', ['current_activity','watch_stats','library_stats','recently_added']),
     'HOME_LIBRARY_CARDS': (list, 'General', ['first_run']),
-    'HOME_STATS_LENGTH': (int, 'General', 30),
-    'HOME_STATS_TYPE': (int, 'General', 0),
-    'HOME_STATS_COUNT': (int, 'General', 5),
     'HOME_STATS_CARDS': (list, 'General', ['top_movies', 'popular_movies', 'top_tv', 'popular_tv', 'top_music', \
         'popular_music', 'last_watched', 'top_users', 'top_platforms', 'most_concurrent']),
-    'HOME_STATS_RECENTLY_ADDED_COUNT': (int, 'General', 50),
     'HOME_REFRESH_INTERVAL': (int, 'General', 10),
     'HTTPS_CREATE_CERT': (int, 'General', 1),
     'HTTPS_CERT': (str, 'General', ''),
@@ -921,3 +913,9 @@ class Config(object):
         if self.CONFIG_VERSION == 11:
             self.ANON_REDIRECT = self.ANON_REDIRECT.replace('http://www.nullrefer.com/?',
                                                             'https://www.nullrefer.com/?')
+            self.CONFIG_VERSION = 12
+
+        if self.CONFIG_VERSION == 12:
+            self.BUFFER_THRESHOLD = max(self.BUFFER_THRESHOLD, 10)
+
+            self.CONFIG_VERSION = 13

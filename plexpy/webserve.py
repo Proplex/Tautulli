@@ -173,10 +173,6 @@ class WebInterface(object):
     def home(self, **kwargs):
         config = {
             "home_sections": plexpy.CONFIG.HOME_SECTIONS,
-            "home_stats_length": plexpy.CONFIG.HOME_STATS_LENGTH,
-            "home_stats_type": plexpy.CONFIG.HOME_STATS_TYPE,
-            "home_stats_count": plexpy.CONFIG.HOME_STATS_COUNT,
-            "home_stats_recently_added_count": plexpy.CONFIG.HOME_STATS_RECENTLY_ADDED_COUNT,
             "home_refresh_interval": plexpy.CONFIG.HOME_REFRESH_INTERVAL,
             "pms_name": plexpy.CONFIG.PMS_NAME,
             "pms_is_cloud": plexpy.CONFIG.PMS_IS_CLOUD,
@@ -293,31 +289,13 @@ class WebInterface(object):
 
     @cherrypy.expose
     @requireAuth()
-    def home_stats(self, time_range=30, stats_type=0, stats_count=10, **kwargs):
+    def home_stats(self, time_range=30, stats_type='plays', stats_count=10, **kwargs):
         data_factory = datafactory.DataFactory()
         stats_data = data_factory.get_home_stats(time_range=time_range,
                                                  stats_type=stats_type,
                                                  stats_count=stats_count)
 
         return serve_template(templatename="home_stats.html", title="Stats", data=stats_data)
-
-    @cherrypy.expose
-    @requireAuth(member_of("admin"))
-    def set_home_stats_config(self, time_range=None, stats_type=None, stats_count=None, recently_added_count=None, **kwargs):
-        if time_range:
-            plexpy.CONFIG.__setattr__('HOME_STATS_LENGTH', time_range)
-            plexpy.CONFIG.write()
-        if stats_type:
-            plexpy.CONFIG.__setattr__('HOME_STATS_TYPE', stats_type)
-            plexpy.CONFIG.write()
-        if stats_count:
-            plexpy.CONFIG.__setattr__('HOME_STATS_COUNT', stats_count)
-            plexpy.CONFIG.write()
-        if recently_added_count:
-            plexpy.CONFIG.__setattr__('HOME_STATS_RECENTLY_ADDED_COUNT', recently_added_count)
-            plexpy.CONFIG.write()
-
-        return "Updated home stats config values."
 
     @cherrypy.expose
     @requireAuth()
@@ -332,11 +310,11 @@ class WebInterface(object):
 
     @cherrypy.expose
     @requireAuth()
-    def get_recently_added(self, count='0', type='', **kwargs):
+    def get_recently_added(self, count='0', media_type='', **kwargs):
 
         try:
             pms_connect = pmsconnect.PmsConnect()
-            result = pms_connect.get_recently_added_details(count=count, type=type)
+            result = pms_connect.get_recently_added_details(count=count, media_type=media_type)
         except IOError as e:
             return serve_template(templatename="recently_added.html", data=None)
 
@@ -1718,7 +1696,7 @@ class WebInterface(object):
             custom_where.append(['session_history_metadata.section_id', section_id])
         if 'media_type' in kwargs:
             media_type = kwargs.get('media_type', "")
-            if media_type:
+            if media_type != 'all':
                 custom_where.append(['session_history.media_type', media_type])
         if 'transcode_decision' in kwargs:
             transcode_decision = kwargs.get('transcode_decision', "")
@@ -1838,34 +1816,7 @@ class WebInterface(object):
     @cherrypy.expose
     @requireAuth()
     def graphs(self, **kwargs):
-
-        config = {
-            "graph_type": plexpy.CONFIG.GRAPH_TYPE,
-            "graph_days": plexpy.CONFIG.GRAPH_DAYS,
-            "graph_months": plexpy.CONFIG.GRAPH_MONTHS,
-            "graph_tab": plexpy.CONFIG.GRAPH_TAB,
-            "music_logging_enable": plexpy.CONFIG.MUSIC_LOGGING_ENABLE
-        }
-
-        return serve_template(templatename="graphs.html", title="Graphs", config=config)
-
-    @cherrypy.expose
-    @requireAuth(member_of("admin"))
-    def set_graph_config(self, graph_type=None, graph_days=None, graph_months=None, graph_tab=None, **kwargs):
-        if graph_type:
-            plexpy.CONFIG.__setattr__('GRAPH_TYPE', graph_type)
-            plexpy.CONFIG.write()
-        if graph_days:
-            plexpy.CONFIG.__setattr__('GRAPH_DAYS', graph_days)
-            plexpy.CONFIG.write()
-        if graph_months:
-            plexpy.CONFIG.__setattr__('GRAPH_MONTHS', graph_months)
-            plexpy.CONFIG.write()
-        if graph_tab:
-            plexpy.CONFIG.__setattr__('GRAPH_TAB', graph_tab)
-            plexpy.CONFIG.write()
-
-        return "Updated graphs config values."
+        return serve_template(templatename="graphs.html", title="Graphs")
 
     @cherrypy.expose
     @cherrypy.tools.json_out()
@@ -2990,7 +2941,8 @@ class WebInterface(object):
         # Get new server URLs for SSL communications and get new server friendly name
         if server_changed:
             plextv.get_server_resources()
-            web_socket.reconnect()
+            if plexpy.WS_CONNECTED:
+                web_socket.reconnect()
 
         # If first run, start websocket
         if first_run:
@@ -3042,6 +2994,11 @@ class WebInterface(object):
     @requireAuth(member_of("admin"))
     def get_scheduler_table(self, **kwargs):
         return serve_template(templatename="scheduler_table.html")
+
+    @cherrypy.expose
+    @requireAuth(member_of("admin"))
+    def get_queue_modal(self, queue=None, **kwargs):
+        return serve_template(templatename="queue_modal.html", queue=queue)
 
     @cherrypy.expose
     @cherrypy.tools.json_out()
@@ -4700,8 +4657,8 @@ class WebInterface(object):
     @cherrypy.tools.json_out()
     @requireAuth(member_of("admin"))
     @addtoapi("get_recently_added")
-    def get_recently_added_details(self, start='0', count='0', type='', section_id='', **kwargs):
-        """ Get all items that where recelty added to plex.
+    def get_recently_added_details(self, start='0', count='0', media_type='', section_id='', **kwargs):
+        """ Get all items that where recently added to plex.
 
             ```
             Required parameters:
@@ -4709,7 +4666,7 @@ class WebInterface(object):
 
             Optional parameters:
                 start (str):        The item number to start at
-                type (str):         The media type: movie, show, artist
+                media_type (str):   The media type: movie, show, artist
                 section_id (str):   The id of the Plex library section
 
             Returns:
@@ -4739,8 +4696,12 @@ class WebInterface(object):
                      }
             ```
         """
+        # For backwards compatibility
+        if 'type' in kwargs:
+            media_type = kwargs['type']
+
         pms_connect = pmsconnect.PmsConnect()
-        result = pms_connect.get_recently_added_details(start=start, count=count, type=type, section_id=section_id)
+        result = pms_connect.get_recently_added_details(start=start, count=count, media_type=media_type, section_id=section_id)
 
         if result:
             return result
@@ -5334,7 +5295,7 @@ class WebInterface(object):
     @cherrypy.tools.json_out()
     @requireAuth(member_of("admin"))
     @addtoapi()
-    def get_home_stats(self, grouping=0, time_range='30', stats_type=0, stats_count='10', **kwargs):
+    def get_home_stats(self, grouping=0, time_range=30, stats_type='plays', stats_count=10, **kwargs):
         """ Get the homepage watch statistics.
 
             ```
@@ -5344,7 +5305,7 @@ class WebInterface(object):
             Optional parameters:
                 grouping (int):         0 or 1
                 time_range (str):       The time range to calculate statistics, '30'
-                stats_type (int):       0 for plays, 1 for duration
+                stats_type (str):       plays or duration
                 stats_count (str):      The number of top items to list, '5'
 
             Returns:
@@ -5408,6 +5369,12 @@ class WebInterface(object):
                      ]
             ```
         """
+        # For backwards compatibility
+        if stats_type in (0, "0"):
+            stats_type = 'plays'
+        elif stats_type in (1, '1'):
+            stats_type = 'duration'
+
         data_factory = datafactory.DataFactory()
         result = data_factory.get_home_stats(grouping=grouping,
                                              time_range=time_range,

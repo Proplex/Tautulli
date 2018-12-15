@@ -68,6 +68,7 @@ DAEMON = False
 CREATEPID = False
 PIDFILE = None
 NOFORK = False
+DOCKER = False
 
 SCHED = BackgroundScheduler()
 SCHED_LOCK = threading.Lock()
@@ -109,6 +110,8 @@ TRACKER = None
 
 WIN_SYS_TRAY_ICON = None
 
+SYS_TIMEZONE = None
+SYS_UTC_OFFSET = None
 
 def initialize(config_file):
     with INIT_LOCK:
@@ -140,21 +143,13 @@ def initialize(config_file):
         if not CONFIG.HTTPS_KEY:
             CONFIG.HTTPS_KEY = os.path.join(DATA_DIR, 'server.key')
 
-        if not CONFIG.LOG_DIR:
-            CONFIG.LOG_DIR = os.path.join(DATA_DIR, 'logs')
-
-        if not os.path.exists(CONFIG.LOG_DIR):
-            try:
-                os.makedirs(CONFIG.LOG_DIR)
-            except OSError:
-                CONFIG.LOG_DIR = None
-
-                if not QUIET:
-                    sys.stderr.write("Unable to create the log directory. " \
-                                     "Logging to screen only.\n")
+        CONFIG.LOG_DIR, log_writable = check_folder_writable(
+            CONFIG.LOG_DIR, os.path.join(DATA_DIR, 'logs'), 'logs')
+        if not log_writable and not QUIET:
+            sys.stderr.write("Unable to create the log directory. Logging to screen only.\n")
 
         # Start the logger, disable console if needed
-        logger.initLogger(console=not QUIET, log_dir=CONFIG.LOG_DIR,
+        logger.initLogger(console=not QUIET, log_dir=CONFIG.LOG_DIR if log_writable else None,
                           verbose=VERBOSE)
 
         logger.info(u"Starting Tautulli {}".format(
@@ -163,6 +158,9 @@ def initialize(config_file):
         logger.info(u"{} {} ({}{})".format(
             common.PLATFORM, common.PLATFORM_RELEASE, common.PLATFORM_VERSION,
             ' - {}'.format(common.PLATFORM_LINUX_DISTRO) if common.PLATFORM_LINUX_DISTRO else ''
+        ))
+        logger.info(u"{} (UTC{})".format(
+            plexpy.SYS_TIMEZONE, plexpy.SYS_UTC_OFFSET
         ))
         logger.info(u"Python {}".format(
             sys.version
@@ -177,29 +175,12 @@ def initialize(config_file):
             DB_FILE
         ))
 
-        if not CONFIG.BACKUP_DIR:
-            CONFIG.BACKUP_DIR = os.path.join(DATA_DIR, 'backups')
-        if not os.path.exists(CONFIG.BACKUP_DIR):
-            try:
-                os.makedirs(CONFIG.BACKUP_DIR)
-            except OSError as e:
-                logger.error(u"Could not create backup dir '%s': %s" % (CONFIG.BACKUP_DIR, e))
-
-        if not CONFIG.CACHE_DIR:
-            CONFIG.CACHE_DIR = os.path.join(DATA_DIR, 'cache')
-        if not os.path.exists(CONFIG.CACHE_DIR):
-            try:
-                os.makedirs(CONFIG.CACHE_DIR)
-            except OSError as e:
-                logger.error(u"Could not create cache dir '%s': %s" % (CONFIG.CACHE_DIR, e))
-
-        if not CONFIG.NEWSLETTER_DIR:
-            CONFIG.NEWSLETTER_DIR = os.path.join(DATA_DIR, 'newsletters')
-        if not os.path.exists(CONFIG.NEWSLETTER_DIR):
-            try:
-                os.makedirs(CONFIG.NEWSLETTER_DIR)
-            except OSError as e:
-                logger.error(u"Could not create newsletter dir '%s': %s" % (CONFIG.NEWSLETTER_DIR, e))
+        CONFIG.BACKUP_DIR, _ = check_folder_writable(
+            CONFIG.BACKUP_DIR, os.path.join(DATA_DIR, 'backups'), 'backups')
+        CONFIG.CACHE_DIR, _ = check_folder_writable(
+            CONFIG.CACHE_DIR, os.path.join(DATA_DIR, 'cache'), 'cache')
+        CONFIG.NEWSLETTER_DIR, _ = check_folder_writable(
+            CONFIG.NEWSLETTER_DIR, os.path.join(DATA_DIR, 'newsletters'), 'newsletters')
 
         # Initialize the database
         logger.info(u"Checking if the database upgrades are required...")
@@ -669,7 +650,7 @@ def dbcheck():
     # library_sections table :: This table keeps record of the servers library sections
     c_db.execute(
         'CREATE TABLE IF NOT EXISTS library_sections (id INTEGER PRIMARY KEY AUTOINCREMENT, '
-        'server_id TEXT, section_id INTEGER, section_name TEXT, section_type TEXT, '
+        'server_id TEXT, section_id INTEGER, section_name TEXT, section_type TEXT, agent TEXT, '
         'thumb TEXT, custom_thumb_url TEXT, art TEXT, count INTEGER, parent_count INTEGER, child_count INTEGER, '
         'do_notify INTEGER DEFAULT 1, do_notify_created INTEGER DEFAULT 1, keep_history INTEGER DEFAULT 1, '
         'deleted_section INTEGER DEFAULT 0, UNIQUE(server_id, section_id))'
@@ -687,17 +668,17 @@ def dbcheck():
         'CREATE TABLE IF NOT EXISTS notifiers (id INTEGER PRIMARY KEY AUTOINCREMENT, '
         'agent_id INTEGER, agent_name TEXT, agent_label TEXT, friendly_name TEXT, notifier_config TEXT, '
         'on_play INTEGER DEFAULT 0, on_stop INTEGER DEFAULT 0, on_pause INTEGER DEFAULT 0, '
-        'on_resume INTEGER DEFAULT 0, on_buffer INTEGER DEFAULT 0, on_watched INTEGER DEFAULT 0, '
+        'on_resume INTEGER DEFAULT 0, on_change INTEGER DEFAULT 0, on_buffer INTEGER DEFAULT 0, on_watched INTEGER DEFAULT 0, '
         'on_created INTEGER DEFAULT 0, on_extdown INTEGER DEFAULT 0, on_intdown INTEGER DEFAULT 0, '
         'on_extup INTEGER DEFAULT 0, on_intup INTEGER DEFAULT 0, on_pmsupdate INTEGER DEFAULT 0, '
         'on_concurrent INTEGER DEFAULT 0, on_newdevice INTEGER DEFAULT 0, on_plexpyupdate INTEGER DEFAULT 0, '
         'on_play_subject TEXT, on_stop_subject TEXT, on_pause_subject TEXT, '
-        'on_resume_subject TEXT, on_buffer_subject TEXT, on_watched_subject TEXT, '
+        'on_resume_subject TEXT, on_change_subject TEXT, on_buffer_subject TEXT, on_watched_subject TEXT, '
         'on_created_subject TEXT, on_extdown_subject TEXT, on_intdown_subject TEXT, '
         'on_extup_subject TEXT, on_intup_subject TEXT, on_pmsupdate_subject TEXT, '
         'on_concurrent_subject TEXT, on_newdevice_subject TEXT, on_plexpyupdate_subject TEXT, '
         'on_play_body TEXT, on_stop_body TEXT, on_pause_body TEXT, '
-        'on_resume_body TEXT, on_buffer_body TEXT, on_watched_body TEXT, '
+        'on_resume_body TEXT, on_change_body TEXT, on_buffer_body TEXT, on_watched_body TEXT, '
         'on_created_body TEXT, on_extdown_body TEXT, on_intdown_body TEXT, '
         'on_extup_body TEXT, on_intup_body TEXT, on_pmsupdate_body TEXT, '
         'on_concurrent_body TEXT, on_newdevice_body TEXT, on_plexpyupdate_body TEXT, '
@@ -1687,6 +1668,15 @@ def dbcheck():
     except sqlite3.OperationalError:
         logger.warn(u"Unable to remove duplicate libraries from library_sections table.")
 
+    # Upgrade library_sections table from earlier versions
+    try:
+        c_db.execute('SELECT agent FROM library_sections')
+    except sqlite3.OperationalError:
+        logger.debug(u"Altering database. Updating database table library_sections.")
+        c_db.execute(
+            'ALTER TABLE library_sections ADD COLUMN agent TEXT'
+        )
+
     # Upgrade users table from earlier versions (remove UNIQUE constraint on username)
     try:
         result = c_db.execute('SELECT SQL FROM sqlite_master WHERE type="table" AND name="users"').fetchone()
@@ -1756,6 +1746,21 @@ def dbcheck():
         )
         c_db.execute(
             'ALTER TABLE notifiers ADD COLUMN custom_conditions_logic TEXT'
+        )
+
+    # Upgrade notifiers table from earlier versions
+    try:
+        c_db.execute('SELECT on_change FROM notifiers')
+    except sqlite3.OperationalError:
+        logger.debug(u"Altering database. Updating database table notifiers.")
+        c_db.execute(
+            'ALTER TABLE notifiers ADD COLUMN on_change INTEGER DEFAULT 0'
+        )
+        c_db.execute(
+            'ALTER TABLE notifiers ADD COLUMN on_change_subject TEXT'
+        )
+        c_db.execute(
+            'ALTER TABLE notifiers ADD COLUMN on_change_body TEXT'
         )
 
     # Upgrade tvmaze_lookup table from earlier versions
@@ -1974,3 +1979,29 @@ def analytics_event(category, action, label=None, value=None, **kwargs):
             TRACKER.send('event', data)
         except Exception as e:
             logger.warn(u"Failed to send analytics event for category '%s', action '%s': %s" % (category, action, e))
+
+
+def check_folder_writable(folder, fallback, name):
+    if not folder:
+        folder = fallback
+
+    if not os.path.exists(folder):
+        try:
+            os.makedirs(folder)
+        except OSError as e:
+            logger.error(u"Could not create %s dir '%s': %s" % (name, folder, e))
+            if folder != fallback:
+                logger.warn(u"Falling back to %s dir '%s'" % (name, fallback))
+                return check_folder_writable(None, fallback, name)
+            else:
+                return folder, None
+
+    if not os.access(folder, os.W_OK):
+        logger.error(u"Cannot write to %s dir '%s'" % (name, folder))
+        if folder != fallback:
+            logger.warn(u"Falling back to %s dir '%s'" % (name, fallback))
+            return check_folder_writable(None, fallback, name)
+        else:
+            return folder, False
+
+    return folder, True
