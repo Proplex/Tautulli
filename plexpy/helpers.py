@@ -522,11 +522,28 @@ def process_json_kwargs(json_kwargs):
     return params
 
 
-def sanitize(string):
-    if string:
-        return unicode(string).replace('<','&lt;').replace('>','&gt;')
+def sanitize_out(*dargs, **dkwargs):
+    """ Helper decorator that sanitized the output
+    """
+    def rd(function):
+        @wraps(function)
+        def wrapper(*args, **kwargs):
+            return sanitize(function(*args, **kwargs))
+        return wrapper
+    return rd
+
+
+def sanitize(obj):
+    if isinstance(obj, basestring):
+        return unicode(obj).replace('<', '&lt;').replace('>', '&gt;')
+    elif isinstance(obj, list):
+        return [sanitize(o) for o in obj]
+    elif isinstance(obj, dict):
+        return {k: sanitize(v) for k, v in obj.iteritems()}
+    elif isinstance(obj, tuple):
+        return tuple(sanitize(list(obj)))
     else:
-        return ''
+        return obj
 
 
 def is_public_ip(host):
@@ -801,7 +818,7 @@ def upload_to_cloudinary(img_data, img_title='', rating_key='', fallback=''):
     try:
         response = upload('data:image/png;base64,{}'.format(base64.b64encode(img_data)),
                           public_id='{}_{}'.format(fallback, rating_key),
-                          tags=[fallback, str(rating_key)],
+                          tags=['tautulli', fallback, str(rating_key)],
                           context={'title': img_title.encode('utf-8'), 'rating_key': str(rating_key), 'fallback': fallback})
         logger.debug(u"Tautulli Helpers :: Image '{}' ({}) uploaded to Cloudinary.".format(img_title, fallback))
         img_url = response.get('url', '')
@@ -811,7 +828,7 @@ def upload_to_cloudinary(img_data, img_title='', rating_key='', fallback=''):
     return img_url
 
 
-def delete_from_cloudinary(rating_key):
+def delete_from_cloudinary(rating_key=None, delete_all=False):
     """ Deletes an image from Cloudinary """
     if not plexpy.CONFIG.CLOUDINARY_CLOUD_NAME or not plexpy.CONFIG.CLOUDINARY_API_KEY or not plexpy.CONFIG.CLOUDINARY_API_SECRET:
         logger.error(u"Tautulli Helpers :: Cannot delete image from Cloudinary. Cloudinary settings not specified in the settings.")
@@ -823,9 +840,15 @@ def delete_from_cloudinary(rating_key):
         api_secret=plexpy.CONFIG.CLOUDINARY_API_SECRET
     )
 
-    delete_resources_by_tag(str(rating_key))
+    if delete_all:
+        delete_resources_by_tag('tautulli')
+        logger.debug(u"Tautulli Helpers :: Deleted all images from Cloudinary.")
+    elif rating_key:
+        delete_resources_by_tag(str(rating_key))
+        logger.debug(u"Tautulli Helpers :: Deleted images from Cloudinary with rating_key {}.".format(rating_key))
+    else:
+        logger.debug(u"Tautulli Helpers :: Unable to delete images from Cloudinary: No rating_key provided.")
 
-    logger.debug(u"Tautulli Helpers :: Deleted images from Cloudinary with rating_key {}.".format(rating_key))
     return True
 
 

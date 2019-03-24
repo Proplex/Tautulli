@@ -55,7 +55,7 @@ import users
 import versioncheck
 import web_socket
 from plexpy.api2 import API2
-from plexpy.helpers import checked, addtoapi, get_ip, create_https_certificates, build_datatables_json
+from plexpy.helpers import checked, addtoapi, get_ip, create_https_certificates, build_datatables_json, sanitize_out
 from plexpy.session import get_session_info, get_session_user_id, allow_session_user, allow_session_library
 from plexpy.webauth import AuthController, requireAuth, member_of
 
@@ -176,7 +176,8 @@ class WebInterface(object):
             "home_refresh_interval": plexpy.CONFIG.HOME_REFRESH_INTERVAL,
             "pms_name": plexpy.CONFIG.PMS_NAME,
             "pms_is_cloud": plexpy.CONFIG.PMS_IS_CLOUD,
-            "update_show_changelog": plexpy.CONFIG.UPDATE_SHOW_CHANGELOG
+            "update_show_changelog": plexpy.CONFIG.UPDATE_SHOW_CHANGELOG,
+            "first_run_complete": plexpy.CONFIG.FIRST_RUN_COMPLETE
         }
         return serve_template(templatename="index.html", title="Home", config=config)
 
@@ -349,6 +350,7 @@ class WebInterface(object):
     @cherrypy.expose
     @cherrypy.tools.json_out()
     @requireAuth()
+    @sanitize_out()
     @addtoapi("get_libraries_table")
     def get_library_list(self, **kwargs):
         """ Get the data on the Tautulli libraries table.
@@ -427,6 +429,7 @@ class WebInterface(object):
     @cherrypy.expose
     @cherrypy.tools.json_out()
     @requireAuth(member_of("admin"))
+    @sanitize_out()
     @addtoapi("get_library_names")
     def get_library_sections(self, **kwargs):
         """ Get a list of library sections and ids on the PMS.
@@ -1014,6 +1017,7 @@ class WebInterface(object):
     @cherrypy.expose
     @cherrypy.tools.json_out()
     @requireAuth()
+    @sanitize_out()
     @addtoapi("get_users_table")
     def get_user_list(self, **kwargs):
         """ Get the data on Tautulli users table.
@@ -1228,6 +1232,7 @@ class WebInterface(object):
     @cherrypy.expose
     @cherrypy.tools.json_out()
     @requireAuth()
+    @sanitize_out()
     @addtoapi()
     def get_user_ips(self, user_id=None, **kwargs):
         """ Get the data on Tautulli users IP table.
@@ -1294,6 +1299,7 @@ class WebInterface(object):
     @cherrypy.expose
     @cherrypy.tools.json_out()
     @requireAuth()
+    @sanitize_out()
     @addtoapi()
     def get_user_logins(self, user_id=None, **kwargs):
         """ Get the data on Tautulli user login table.
@@ -1575,6 +1581,7 @@ class WebInterface(object):
     @cherrypy.expose
     @cherrypy.tools.json_out()
     @requireAuth()
+    @sanitize_out()
     @addtoapi()
     def get_history(self, user=None, user_id=None, grouping=None, **kwargs):
         """ Get the Tautulli history.
@@ -1821,6 +1828,7 @@ class WebInterface(object):
     @cherrypy.expose
     @cherrypy.tools.json_out()
     @requireAuth()
+    @sanitize_out()
     @addtoapi()
     def get_user_names(self, **kwargs):
         """ Get a list of all user and user ids.
@@ -2293,6 +2301,7 @@ class WebInterface(object):
 
     @cherrypy.expose
     @cherrypy.tools.json_out()
+    @sanitize_out()
     @requireAuth()
     def get_sync(self, machine_id=None, user_id=None, **kwargs):
         if user_id == 'null':
@@ -2434,6 +2443,7 @@ class WebInterface(object):
     @cherrypy.expose
     @cherrypy.tools.json_out()
     @requireAuth(member_of("admin"))
+    @sanitize_out()
     @addtoapi()
     def get_notification_log(self, **kwargs):
         """ Get the data on the Tautulli notification logs table.
@@ -2495,6 +2505,7 @@ class WebInterface(object):
     @cherrypy.expose
     @cherrypy.tools.json_out()
     @requireAuth(member_of("admin"))
+    @sanitize_out()
     @addtoapi()
     def get_newsletter_log(self, **kwargs):
         """ Get the data on the Tautulli newsletter logs table.
@@ -3773,6 +3784,7 @@ class WebInterface(object):
                     'update': True,
                     'release': True,
                     'message': 'A new release (%s) of Tautulli is available.' % plexpy.LATEST_RELEASE,
+                    'current_release': plexpy.common.RELEASE,
                     'latest_release': plexpy.LATEST_RELEASE,
                     'release_url': helpers.anon_url(
                         'https://github.com/%s/%s/releases/tag/%s'
@@ -3786,6 +3798,7 @@ class WebInterface(object):
                     'update': True,
                     'release': False,
                     'message': 'A newer version of Tautulli is available.',
+                    'current_version': plexpy.CURRENT_VERSION,
                     'latest_version': plexpy.LATEST_VERSION,
                     'commits_behind': plexpy.COMMITS_BEHIND,
                     'compare_url': helpers.anon_url(
@@ -5228,6 +5241,7 @@ class WebInterface(object):
     @cherrypy.expose
     @cherrypy.tools.json_out()
     @requireAuth(member_of("admin"))
+    @sanitize_out()
     @addtoapi()
     def get_synced_items(self, machine_id='', user_id='', **kwargs):
         """ Get a list of synced items on the PMS.

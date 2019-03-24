@@ -336,7 +336,7 @@ class PlexTV(object):
 
     def get_plextv_downloads(self, plexpass=False, output_format=''):
         if plexpass:
-            uri = '/api/downloads/1.json?channel=plexpass'
+            uri = '/api/downloads/5.json?channel=plexpass'
         else:
             uri = '/api/downloads/1.json'
         request = self.request_handler.make_request(uri=uri,
@@ -566,13 +566,13 @@ class PlexTV(object):
                         settings_photo_quality = helpers.get_xml_attr(settings, 'photoQuality')
                         settings_photo_resolution = helpers.get_xml_attr(settings, 'photoResolution')
 
-                    sync_details = {"device_name": helpers.sanitize(device_name),
-                                    "platform": helpers.sanitize(device_platform),
+                    sync_details = {"device_name": device_name,
+                                    "platform": device_platform,
                                     "user_id": device_user_id,
-                                    "user": helpers.sanitize(device_friendly_name),
-                                    "username": helpers.sanitize(device_username),
-                                    "root_title": helpers.sanitize(sync_root_title),
-                                    "sync_title": helpers.sanitize(sync_title),
+                                    "user": device_friendly_name,
+                                    "username": device_username,
+                                    "root_title": sync_root_title,
+                                    "sync_title": sync_title,
                                     "metadata_type": sync_metadata_type,
                                     "content_type": sync_content_type,
                                     "rating_key": rating_key,
