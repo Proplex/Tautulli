@@ -8,6 +8,13 @@
 
 <%def name="body()">
 <div class='container-fluid'>
+    % if config['database_is_importing']:
+    <div style="text-align: center; margin-top: 20px;">
+        <i class="fa fa-refresh fa-spin"></i>&nbsp; Tautulli is importing history from another database. This could take a few minutes depending on the size of your database.
+        <br />
+        You may leave this page and check back later.
+    </div>
+    % endif
     <div class='table-card-header'>
         <div class="header-bar">
             <span><i class="fa fa-history"></i> History</span>
@@ -44,6 +51,9 @@
                 <label class="btn btn-dark">
                     <input type="radio" name="media_type-filter" id="history-track" value="track" autocomplete="off"> Music
                 </label>
+                <label class="btn btn-dark">
+                    <input type="radio" name="media_type-filter" id="history-live" value="live" autocomplete="off"> Live TV
+                </label>
             </div>
             <div class="btn-group">
                 <button class="btn btn-dark refresh-history-button" id="refresh-history-list"><i class="fa fa-refresh"></i> Refresh history</button>
@@ -60,7 +70,8 @@
                 <th align="left" id="friendly_name">User</th>
                 <th align="left" id="ip_address">IP Address</th>
                 <th align="left" id="platform">Platform</th>
-                <th align="left" id="device">Player</th>
+                <th align="left" id="product">Product</th>
+                <th align="left" id="player">Player</th>
                 <th align="left" id="title">Title</th>
                 <th align="left" id="started">Started</th>
                 <th align="left" id="paused_counter">Paused</th>
@@ -143,7 +154,7 @@
             var colvis = new $.fn.dataTable.ColVis(history_table, {
                 buttonText: '<i class="fa fa-columns"></i> Select columns',
                 buttonClass: 'btn btn-dark',
-                exclude: [0, 11]
+                exclude: [0, 12]
             });
             $(colvis.button()).appendTo('div.colvis-button-bar');
 
@@ -181,19 +192,17 @@
                     $('#deleteCount').text(history_to_delete.length);
                     $('#confirm-modal-delete').modal();
                     $('#confirm-modal-delete').one('click', '#confirm-delete', function () {
-                        history_to_delete.forEach(function(row, idx) {
-                            $.ajax({
-                                url: 'delete_history_rows',
-                                type: 'POST',
-                                data: { row_id: row },
-                                async: true,
-                                success: function (data) {
-                                    var msg = "History deleted";
-                                    showMsg(msg, false, true, 2000);
-                                }
-                            });
+                        $.ajax({
+                            url: 'delete_history_rows',
+                            type: 'POST',
+                            data: { row_ids: history_to_delete.join(',') },
+                            async: true,
+                            success: function (data) {
+                                var msg = "History deleted";
+                                showMsg(msg, false, true, 2000);
+                                history_table.draw();
+                            }
                         });
-                        history_table.draw();
                     });
                 }
 

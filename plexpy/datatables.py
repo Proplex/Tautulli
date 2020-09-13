@@ -13,11 +13,20 @@
 #  You should have received a copy of the GNU General Public License
 #  along with Tautulli.  If not, see <http://www.gnu.org/licenses/>.
 
+from __future__ import unicode_literals
+from future.builtins import object
+
 import re
 
-import database
-import helpers
-import logger
+import plexpy
+if plexpy.PYTHON2:
+    import database
+    import helpers
+    import logger
+else:
+    from plexpy import database
+    from plexpy import helpers
+    from plexpy import logger
 
 
 class DataTables(object):
@@ -84,7 +93,7 @@ class DataTables(object):
         query = 'SELECT * FROM (SELECT %s FROM %s %s %s %s %s) %s %s' \
                 % (extracted_columns['column_string'], table_name, join, c_where, group, union, where, order)
 
-        # logger.debug(u"Query: %s" % query)
+        # logger.debug("Query: %s" % query)
 
         # Execute the query
         filtered = self.ssp_db.select(query, args=args)
@@ -142,6 +151,9 @@ class DataTables(object):
                 for w_ in w[1]:
                     if w_ == None:
                         c_where += w[0] + ' IS NULL OR '
+                    elif str(w_).startswith('LIKE '):
+                        c_where += w[0] + ' LIKE ? OR '
+                        args.append(w_[5:])
                     else:
                         c_where += w[0] + ' = ? OR '
                         args.append(w_)
@@ -149,6 +161,9 @@ class DataTables(object):
             else:
                 if w[1] == None:
                     c_where += w[0] + ' IS NULL AND '
+                elif str(w[1]).startswith('LIKE '):
+                    c_where += w[0] + ' LIKE ? AND '
+                    args.append(w[1][5:])
                 else:
                     c_where += w[0] + ' = ? AND '
                     args.append(w[1])

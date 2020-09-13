@@ -1,8 +1,4 @@
-#!/bin/sh
-''''which python    >/dev/null 2>&1 && exec python    "$0" "$@" # '''
-''''which python2   >/dev/null 2>&1 && exec python2   "$0" "$@" # '''
-''''which python2.7 >/dev/null 2>&1 && exec python2.7 "$0" "$@" # '''
-''''exec echo "Error: Python not found!" # '''
+#!/usr/bin/env python
 
 # -*- coding: utf-8 -*-
 
@@ -27,17 +23,24 @@ import sys
 # Ensure lib added to path, before any other imports
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), 'lib'))
 
+from future.builtins import str
+
+import appdirs
 import argparse
 import datetime
 import locale
 import pytz
 import signal
 import time
+import threading
 import tzlocal
 
 import plexpy
-from plexpy import config, database, logger, webstart
-
+from plexpy import common, config, database, helpers, logger, webstart
+if common.PLATFORM == 'Windows':
+    from plexpy import windows
+elif common.PLATFORM == 'Darwin':
+    from plexpy import macos
 
 # Register signals, such as CTRL + C
 signal.signal(signal.SIGINT, plexpy.sig_handler)
@@ -51,12 +54,14 @@ def main():
     """
 
     # Fixed paths to Tautulli
-    if hasattr(sys, 'frozen'):
+    if hasattr(sys, 'frozen') and hasattr(sys, '_MEIPASS'):
+        plexpy.FROZEN = True
         plexpy.FULL_PATH = os.path.abspath(sys.executable)
+        plexpy.PROG_DIR = sys._MEIPASS
     else:
         plexpy.FULL_PATH = os.path.abspath(__file__)
+        plexpy.PROG_DIR = os.path.dirname(plexpy.FULL_PATH)
 
-    plexpy.PROG_DIR = os.path.dirname(plexpy.FULL_PATH)
     plexpy.ARGS = sys.argv[1:]
 
     # From sickbeard
@@ -106,28 +111,27 @@ def main():
         plexpy.QUIET = True
 
     # Do an intial setup of the logger.
-    logger.initLogger(console=not plexpy.QUIET, log_dir=False,
-                      verbose=plexpy.VERBOSE)
+    # Require verbose for pre-initilization to see critical errors
+    logger.initLogger(console=not plexpy.QUIET, log_dir=False, verbose=True)
 
     try:
-        plexpy.SYS_TIMEZONE = str(tzlocal.get_localzone())
-        plexpy.SYS_UTC_OFFSET = datetime.datetime.now(pytz.timezone(plexpy.SYS_TIMEZONE)).strftime('%z')
+        plexpy.SYS_TIMEZONE = tzlocal.get_localzone()
     except (pytz.UnknownTimeZoneError, LookupError, ValueError) as e:
         logger.error("Could not determine system timezone: %s" % e)
-        plexpy.SYS_TIMEZONE = 'Unknown'
-        plexpy.SYS_UTC_OFFSET = '+0000'
+        plexpy.SYS_TIMEZONE = pytz.UTC
 
-    if os.getenv('TAUTULLI_DOCKER', False) == 'True':
+    plexpy.SYS_UTC_OFFSET = datetime.datetime.now(plexpy.SYS_TIMEZONE).strftime('%z')
+
+    if helpers.bool_true(os.getenv('TAUTULLI_DOCKER', False)):
         plexpy.DOCKER = True
 
     if args.dev:
         plexpy.DEV = True
-        logger.debug(u"Tautulli is running in the dev environment.")
+        logger.debug("Tautulli is running in the dev environment.")
 
     if args.daemon:
         if sys.platform == 'win32':
-            sys.stderr.write(
-                "Daemonizing not supported under Windows, starting normally\n")
+            logger.warn("Daemonizing not supported under Windows, starting normally")
         else:
             plexpy.DAEMON = True
             plexpy.QUIET = True
@@ -145,11 +149,13 @@ def main():
             try:
                 with open(plexpy.PIDFILE, 'r') as fp:
                     pid = int(fp.read())
-                os.kill(pid, 0)
             except IOError as e:
                 raise SystemExit("Unable to read PID file: %s", e)
+
+            try:
+                os.kill(pid, 0)
             except OSError:
-                logger.warn("PID file '%s' already exists, but PID %d is " \
+                logger.warn("PID file '%s' already exists, but PID %d is "
                             "not running. Ignoring PID file." %
                             (plexpy.PIDFILE, pid))
             else:
@@ -175,6 +181,8 @@ def main():
     # Determine which data directory and config file to use
     if args.datadir:
         plexpy.DATA_DIR = args.datadir
+    elif plexpy.FROZEN:
+        plexpy.DATA_DIR = appdirs.user_data_dir("Tautulli", False)
     else:
         plexpy.DATA_DIR = plexpy.PROG_DIR
 
@@ -229,37 +237,51 @@ def main():
         try:
             import OpenSSL
         except ImportError:
-            logger.warn("The pyOpenSSL module is missing. Install this " \
+            logger.warn("The pyOpenSSL module is missing. Install this "
                         "module to enable HTTPS. HTTPS will be disabled.")
             plexpy.CONFIG.ENABLE_HTTPS = False
 
     # Try to start the server. Will exit here is address is already in use.
-    web_config = {
-        'http_port': plexpy.HTTP_PORT,
-        'http_host': plexpy.CONFIG.HTTP_HOST,
-        'http_root': plexpy.CONFIG.HTTP_ROOT,
-        'http_environment': plexpy.CONFIG.HTTP_ENVIRONMENT,
-        'http_proxy': plexpy.CONFIG.HTTP_PROXY,
-        'enable_https': plexpy.CONFIG.ENABLE_HTTPS,
-        'https_cert': plexpy.CONFIG.HTTPS_CERT,
-        'https_cert_chain': plexpy.CONFIG.HTTPS_CERT_CHAIN,
-        'https_key': plexpy.CONFIG.HTTPS_KEY,
-        'http_username': plexpy.CONFIG.HTTP_USERNAME,
-        'http_password': plexpy.CONFIG.HTTP_PASSWORD,
-        'http_basic_auth': plexpy.CONFIG.HTTP_BASIC_AUTH
-    }
-    webstart.initialize(web_config)
+    webstart.start()
+
+    if common.PLATFORM == 'Windows':
+        if plexpy.CONFIG.SYS_TRAY_ICON:
+            plexpy.WIN_SYS_TRAY_ICON = windows.WindowsSystemTray()
+            plexpy.WIN_SYS_TRAY_ICON.start()
+        windows.set_startup()
+    elif common.PLATFORM == 'Darwin':
+        macos.set_startup()
 
     # Open webbrowser
     if plexpy.CONFIG.LAUNCH_BROWSER and not args.nolaunch and not plexpy.DEV:
         plexpy.launch_browser(plexpy.CONFIG.HTTP_HOST, plexpy.HTTP_PORT,
                               plexpy.HTTP_ROOT)
 
-    # Windows system tray icon
-    if os.name == 'nt' and plexpy.CONFIG.WIN_SYS_TRAY:
-        plexpy.win_system_tray()
+    if common.PLATFORM == 'Darwin' and plexpy.CONFIG.SYS_TRAY_ICON:
+        if not macos.HAS_PYOBJC:
+            logger.warn("The pyobjc module is missing. Install this "
+                        "module to enable the MacOS menu bar icon.")
+            plexpy.CONFIG.SYS_TRAY_ICON = False
 
-    # Wait endlessy for a signal to happen
+        if plexpy.CONFIG.SYS_TRAY_ICON:
+            # MacOS menu bar icon must be run on the main thread and is blocking
+            # Start the rest of Tautulli on a new thread
+            thread = threading.Thread(target=wait)
+            thread.daemon = True
+            thread.start()
+
+            plexpy.MAC_SYS_TRAY_ICON = macos.MacOSSystemTray()
+            plexpy.MAC_SYS_TRAY_ICON.start()
+        else:
+            wait()
+    else:
+        wait()
+
+
+def wait():
+    logger.info("Tautulli is ready!")
+
+    # Wait endlessly for a signal to happen
     while True:
         if not plexpy.SIGNAL:
             try:
@@ -275,11 +297,16 @@ def main():
                 plexpy.shutdown(restart=True)
             elif plexpy.SIGNAL == 'checkout':
                 plexpy.shutdown(restart=True, checkout=True)
-            else:
+            elif plexpy.SIGNAL == 'reset':
+                plexpy.shutdown(restart=True, reset=True)
+            elif plexpy.SIGNAL == 'update':
                 plexpy.shutdown(restart=True, update=True)
+            else:
+                logger.error('Unknown signal. Shutting down...')
+                plexpy.shutdown()
 
             plexpy.SIGNAL = None
 
-# Call main()
+
 if __name__ == "__main__":
     main()

@@ -3,9 +3,10 @@ import logging
 import os
 from logging.handlers import RotatingFileHandler
 from platform import uname
+from uuid import getnode
+
 from plexapi.config import PlexConfig, reset_base_headers
 from plexapi.utils import SecretsFilter
-from uuid import getnode
 
 # Load User Defined Config
 DEFAULT_CONFIG_PATH = os.path.expanduser('~/.config/plexapi/config.ini')
@@ -14,13 +15,14 @@ CONFIG = PlexConfig(CONFIG_PATH)
 
 # PlexAPI Settings
 PROJECT = 'PlexAPI'
-VERSION = '3.0.6'
+VERSION = '3.6.0'
 TIMEOUT = CONFIG.get('plexapi.timeout', 30, int)
 X_PLEX_CONTAINER_SIZE = CONFIG.get('plexapi.container_size', 100, int)
+X_PLEX_ENABLE_FAST_CONNECT = CONFIG.get('plexapi.enable_fast_connect', False, bool)
 
 # Plex Header Configuation
 X_PLEX_PROVIDES = CONFIG.get('header.provides', 'controller')
-X_PLEX_PLATFORM = CONFIG.get('header.platorm', uname()[0])
+X_PLEX_PLATFORM = CONFIG.get('header.platform', CONFIG.get('header.platorm', uname()[0]))
 X_PLEX_PLATFORM_VERSION = CONFIG.get('header.platform_version', uname()[2])
 X_PLEX_PRODUCT = CONFIG.get('header.product', PROJECT)
 X_PLEX_VERSION = CONFIG.get('header.version', VERSION)

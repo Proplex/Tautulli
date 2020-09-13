@@ -2,20 +2,28 @@
 import logging
 import os
 import re
-import requests
 import time
 import zipfile
 from datetime import datetime
 from getpass import getpass
-from threading import Thread
-from tqdm import tqdm
+from threading import Event, Thread
+
+import requests
 from plexapi import compat
 from plexapi.exceptions import NotFound
 
+try:
+    from tqdm import tqdm
+except ImportError:
+    tqdm = None
+
+log = logging.getLogger('plexapi')
+
 # Search Types - Plex uses these to filter specific media types when searching.
 # Library Types - Populated at runtime
-SEARCHTYPES = {'movie': 1, 'show': 2, 'season': 3, 'episode': 4,
-               'artist': 8, 'album': 9, 'track': 10, 'photo': 14}
+SEARCHTYPES = {'movie': 1, 'show': 2, 'season': 3, 'episode': 4, 'trailer': 5, 'comic': 6, 'person': 7,
+               'artist': 8, 'album': 9, 'track': 10, 'picture': 11, 'clip': 12, 'photo': 13, 'photoalbum': 14,
+               'playlist': 15, 'playlistFolder': 16, 'collection': 18, 'userPlaylistItem': 1001}
 PLEXOBJECTS = {}
 
 
@@ -56,7 +64,7 @@ def registerPlexObject(cls):
 
 def cast(func, value):
     """ Cast the specified value to the specified type (returned by func). Currently this
-        only support int, float, bool. Should be extended if needed.
+        only support str, int, float, bool. Should be extended if needed.
 
         Parameters:
             func (func): Calback function to used cast to type (int, bool, float).
@@ -64,7 +72,13 @@ def cast(func, value):
     """
     if value is not None:
         if func == bool:
-            return bool(int(value))
+            if value in (1, True, "1", "true"):
+                return True
+            elif value in (0, False, "0", "false"):
+                return False
+            else:
+                raise ValueError(value)
+
         elif func in (int, float):
             try:
                 return func(value)
@@ -86,7 +100,7 @@ def joinArgs(args):
     arglist = []
     for key in sorted(args, key=lambda x: x.lower()):
         value = compat.ustr(args[key])
-        arglist.append('%s=%s' % (key, compat.quote(value)))
+        arglist.append('%s=%s' % (key, compat.quote(value, safe='')))
     return '?%s' % '&'.join(arglist)
 
 
@@ -129,10 +143,10 @@ def searchType(libtype):
     """ Returns the integer value of the library string type.
 
         Parameters:
-            libtype (str): LibType to lookup (movie, show, season, episode, artist, album, track)
-
+            libtype (str): LibType to lookup (movie, show, season, episode, artist, album, track,
+                                              collection)
         Raises:
-            NotFound: Unknown libtype
+            :class:`plexapi.exceptions.NotFound`: Unknown libtype
     """
     libtype = compat.ustr(libtype)
     if libtype in [compat.ustr(v) for v in SEARCHTYPES.values()]:
@@ -144,22 +158,26 @@ def searchType(libtype):
 
 def threaded(callback, listargs):
     """ Returns the result of <callback> for each set of \*args in listargs. Each call
-        to <callback. is called concurrently in their own separate threads.
+        to <callback> is called concurrently in their own separate threads.
 
         Parameters:
             callback (func): Callback function to apply to each set of \*args.
             listargs (list): List of lists; \*args to pass each thread.
     """
     threads, results = [], []
+    job_is_done_event = Event()
     for args in listargs:
         args += [results, len(results)]
         results.append(None)
-        threads.append(Thread(target=callback, args=args))
+        threads.append(Thread(target=callback, args=args, kwargs=dict(job_is_done_event=job_is_done_event)))
         threads[-1].setDaemon(True)
         threads[-1].start()
-    for thread in threads:
-        thread.join()
-    return results
+    while not job_is_done_event.is_set():
+        if all([not t.is_alive() for t in threads]):
+            break
+        time.sleep(0.05)
+
+    return [r for r in results if r is not None]
 
 
 def toDatetime(value, format=None):
@@ -171,8 +189,17 @@ def toDatetime(value, format=None):
     """
     if value and value is not None:
         if format:
-            value = datetime.strptime(value, format)
+            try:
+                value = datetime.strptime(value, format)
+            except ValueError:
+                log.info('Failed to parse %s to datetime, defaulting to None', value)
+                return None
         else:
+            # https://bugs.python.org/issue30684
+            # And platform support for before epoch seems to be flaky.
+            # TODO check for others errors too.
+            if int(value) <= 0:
+                value = 86400
             value = datetime.fromtimestamp(int(value))
     return value
 
@@ -242,8 +269,6 @@ def download(url, token, filename=None, savepath=None, session=None, chunksize=4
             >>> download(a_episode.getStreamURL(), a_episode.location)
             /path/to/file
     """
-
-    from plexapi import log
     # fetch the data to be saved
     session = session or requests.Session()
     headers = {'X-Plex-Token': token}
@@ -273,17 +298,17 @@ def download(url, token, filename=None, savepath=None, session=None, chunksize=4
 
     # save the file to disk
     log.info('Downloading: %s', fullpath)
-    if showstatus:  # pragma: no cover
+    if showstatus and tqdm:  # pragma: no cover
         total = int(response.headers.get('content-length', 0))
         bar = tqdm(unit='B', unit_scale=True, total=total, desc=filename)
 
     with open(fullpath, 'wb') as handle:
         for chunk in response.iter_content(chunk_size=chunksize):
             handle.write(chunk)
-            if showstatus:
+            if showstatus and tqdm:
                 bar.update(len(chunk))
 
-    if showstatus:  # pragma: no cover
+    if showstatus and tqdm:  # pragma: no cover
         bar.close()
     # check we want to unzip the contents
     if fullpath.endswith('zip') and unpack:
@@ -361,3 +386,15 @@ def choose(msg, items, attr):  # pragma: no cover
 
         except (ValueError, IndexError):
             pass
+
+
+def getAgentIdentifier(section, agent):
+    """ Return the full agent identifier from a short identifier, name, or confirm full identifier. """
+    agents = []
+    for ag in section.agents():
+        identifiers = [ag.identifier, ag.shortIdentifier, ag.name]
+        if agent in identifiers:
+            return ag.identifier
+        agents += identifiers
+    raise NotFound('Couldnt find "%s" in agents list (%s)' %
+                   (agent, ', '.join(agents)))
